@@ -432,8 +432,8 @@ ssl_install() {
         ${INS} install socat netcat -y
     fi
     judge "安装 SSL 证书生成脚本依赖"
-
-    curl https://get.acme.sh | sh
+    read -rp "请输入用于注册域名的邮箱:" domain_email
+    curl https://get.acme.sh | sh -s email=$domain_email
     judge "安装 SSL 证书生成脚本"
 }
 
@@ -495,27 +495,28 @@ port_exist_check() {
     fi
 }
 acme() {
-    "$HOME"/.acme.sh/acme.sh --set-default-ca --server letsencrypt
+    "$HOME"/.acme.sh/acme.sh --set-default-ca --server zerossl
+    if "$HOME"/.acme.sh/acme.sh --issue -d "${domain}" --standalone -k ec-256 --force --test; then
+        echo -e "${OK} ${GreenBG} SSL 证书测试签发成功，开始正式签发 ${Font}"
+        rm -rf "$HOME/.acme.sh/${domain}_ecc"
+        sleep 2
+    else
+        echo -e "${Error} ${RedBG} SSL 证书测试签发失败 ${Font}"
+        rm -rf "$HOME/.acme.sh/${domain}_ecc"
+        exit 1
+    fi
 
-    if "$HOME"/.acme.sh/acme.sh --issue --insecure -d "${domain}" --standalone -k ec-256 --force; then
+    if "$HOME"/.acme.sh/acme.sh --issue -d "${domain}" --standalone -k ec-256 --force; then
         echo -e "${OK} ${GreenBG} SSL 证书生成成功 ${Font}"
         sleep 2
         mkdir /data
         if "$HOME"/.acme.sh/acme.sh --installcert -d "${domain}" --fullchainpath /data/v2ray.crt --keypath /data/v2ray.key --ecc --force; then
             echo -e "${OK} ${GreenBG} 证书配置成功 ${Font}"
             sleep 2
-            if [[ -n $(type -P wgcf) && -n $(type -P wg-quick) ]]; then
-                wg-quick up wgcf >/dev/null 2>&1
-                echo -e "${OK} ${GreenBG} 已启动 wgcf-warp ${Font}"
-            fi
         fi
     else
         echo -e "${Error} ${RedBG} SSL 证书生成失败 ${Font}"
         rm -rf "$HOME/.acme.sh/${domain}_ecc"
-        if [[ -n $(type -P wgcf) && -n $(type -P wg-quick) ]]; then
-            wg-quick up wgcf >/dev/null 2>&1
-            echo -e "${OK} ${GreenBG} 已启动 wgcf-warp ${Font}"
-        fi
         exit 1
     fi
 }
